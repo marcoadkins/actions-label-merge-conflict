@@ -88,3 +88,25 @@ String. Comment to add when the pull request is conflicting. Supports markdown.
 String. Comment to add when the pull request is not conflicting anymore. Supports markdown.
 
 **Default**: No comment is posted.
+
+### `jiraOnDirty`
+
+**Default**: false
+
+Boolean. Whether to transition jira issue on dirty pr
+
+### `jiraSite`
+
+String. Jira site.
+
+### `jiraUser`
+
+String. Jira username.
+
+### `jiraToken`
+
+String. Jira api token.
+
+### `jiraConflictTransition`
+
+String. Jira transition id for when pr is dirty.

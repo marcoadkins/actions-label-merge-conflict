@@ -1,5 +1,6 @@
 import * as core from "@actions/core";
 import * as github from "@actions/github";
+import { Jira } from "./jira";
 
 type GitHub = ReturnType<typeof github.getOctokit>;
 const prDirtyStatusesOutputKey = `prDirtyStatuses`;
@@ -24,6 +25,12 @@ async function main() {
 	const retryMax = parseInt(core.getInput("retryMax") || "5", 10);
 	const commentOnDirty = core.getInput("commentOnDirty");
 	const commentOnClean = core.getInput("commentOnClean");
+	const jiraOnDirty = core.getInput("jiraOnDirty");
+	const jiraSite = core.getInput("jiraSite");
+	const jiraUser = core.getInput("jiraUser");
+	const jiraToken = core.getInput("jiraToken");
+	const jiraConflictTransition = core.getInput("jiraConflictTransition");
+	const jiraClient = new Jira(jiraSite, jiraUser, jiraToken);
 
 	const isPushEvent = process.env.GITHUB_EVENT_NAME === "push";
 	core.debug(`isPushEvent = ${process.env.GITHUB_EVENT_NAME} === "push"`);
@@ -36,6 +43,9 @@ async function main() {
 		client,
 		commentOnClean,
 		commentOnDirty,
+		jiraOnDirty,
+		jiraClient,
+		jiraConflictTransition,
 		dirtyLabel,
 		removeOnDirtyLabel,
 		after: null,
@@ -55,6 +65,9 @@ interface CheckDirtyContext {
 	client: GitHub;
 	commentOnClean: string;
 	commentOnDirty: string;
+	jiraOnDirty: string;
+	jiraClient: any;
+	jiraConflictTransition: string;
 	dirtyLabel: string;
 	removeOnDirtyLabel: string;
 	/**
@@ -74,6 +87,9 @@ async function checkDirty(
 		client,
 		commentOnClean,
 		commentOnDirty,
+		jiraOnDirty,
+		jiraClient,
+		jiraConflictTransition,
 		dirtyLabel,
 		removeOnDirtyLabel,
 		retryAfter,
@@ -89,6 +105,7 @@ async function checkDirty(
 		repository: {
 			pullRequests: {
 				nodes: Array<{
+					headRefName: string;
 					mergeable: string;
 					number: number;
 					permalink: string;
@@ -110,6 +127,7 @@ query openPullRequests($owner: String!, $repo: String!, $after: String, $baseRef
   repository(owner:$owner, name: $repo) { 
     pullRequests(first: 100, after: $after, states: OPEN, baseRefName: $baseRefName) {
       nodes {
+        headRefName
         mergeable
         number
         permalink
@@ -175,6 +193,18 @@ query openPullRequests($owner: String!, $repo: String!, $after: String, $baseRef
 				]);
 				if (commentOnDirty !== "" && addedDirtyLabel) {
 					await addComment(commentOnDirty, pullRequest, { client });
+				}
+				if (jiraOnDirty !== "" && addedDirtyLabel) {
+					const ticketNumberResult = pullRequest.headRefName
+						.toUpperCase()
+						.match(/[A-Z]+-\d+/g);
+					if (ticketNumberResult) {
+						await jiraClient.transitionTicket(
+							ticketNumberResult[0],
+							jiraConflictTransition,
+							'Moved to in progress due to merge conflict',
+						);
+					}
 				}
 				dirtyStatuses[pullRequest.number] = true;
 				break;
